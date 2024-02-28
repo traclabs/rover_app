@@ -95,7 +95,7 @@ typedef struct
 /*
 ** Local function prototypes.
 **
-** Note: Except for the entry point (RobotSimMain), these
+** Note: Except for the entry point (RoverAppMain), these
 **       functions are not called from any other source module.
 */
 void  RoverAppMain(void);

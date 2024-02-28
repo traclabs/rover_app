@@ -58,7 +58,7 @@
  * official version. @n See @ref cfsversions for format differences between development and release versions.
  */
 #define ROVER_APP_VERSION_STRING                       \
-    " ROBOT SIM DEVELOPMENT BUILD " ROVER_APP_VERSION \
+    " ROVER APP DEVELOPMENT BUILD " ROVER_APP_VERSION \
     ", Last Official Release: v1.1.0" /* For full support please use this version */
 
 #endif /* ROVER_APP_VERSION_H */

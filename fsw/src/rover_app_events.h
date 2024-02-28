@@ -21,7 +21,7 @@
 ** File: rover_app_events.h
 **
 ** Purpose:
-**  Define Robot Sim Events IDs
+**  Define Rover App Events IDs
 **
 ** Notes:
 **

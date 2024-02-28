@@ -74,7 +74,7 @@ void RoverAppMain(void)
     }
 
     /*
-    ** ros Runloop
+    ** Runloop
     */
     while (CFE_ES_RunLoop(&RoverAppData.RunStatus) == true)
     {
@@ -170,7 +170,7 @@ int32 RoverAppInit(void)
     status = CFE_EVS_Register(RoverAppData.EventFilters, ROVER_APP_EVENT_COUNTS, CFE_EVS_EventFilter_BINARY);
     if (status != CFE_SUCCESS)
     {
-        CFE_ES_WriteToSysLog("Robot Sim: Error Registering Events, RC = 0x%08lX\n", (unsigned long)status);
+        CFE_ES_WriteToSysLog("RoverApp: Error Registering Events, RC = 0x%08lX\n", (unsigned long)status);
         return (status);
     }
 

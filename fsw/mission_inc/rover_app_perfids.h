@@ -18,7 +18,7 @@
 **      See the License for the specific language governing permissions and
 **      limitations under the License.
 **
-** File: robot_sim_perfids.h
+** File: rover_app_perfids.h
 **
 ** Purpose:
 **  Define Rover App Performance IDs
