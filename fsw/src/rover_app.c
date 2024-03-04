@@ -41,9 +41,7 @@
 ** global data
 */
 RoverAppData_t RoverAppData;
-RoverAppTwist_t RoverAppLastTwist;
-RoverAppTlmState_t StateMsg;
-//float Kp = 0.01;
+RoverAppOdometry_t lastOdomMsg;
 
 void HighRateControLoop(void);
 
@@ -133,13 +131,13 @@ int32 RoverAppInit(void)
     RoverAppData.square_counter = 0;
     RoverAppData.hk_counter = 0;
 
-    RoverAppData.HkTlm.Payload.state.pose_x = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_y = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_z = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_qx = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_qy = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_qz = 0.0;
-    RoverAppData.HkTlm.Payload.state.pose_qw = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.x = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.y = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.z = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.qx = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.qy = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.qz = 0.0;
+    RoverAppData.HkTlm.Payload.state.pose.qw = 0.0;
 
     /*
     ** Initialize app configuration data
@@ -178,7 +176,7 @@ int32 RoverAppInit(void)
     ** Initialize housekeeping packet (clear user data area).
     */
     CFE_MSG_Init(&RoverAppData.HkTlm.TlmHeader.Msg, CFE_SB_ValueToMsgId(ROVER_APP_HK_TLM_MID), sizeof(RoverAppData.HkTlm));
-    CFE_MSG_Init(&StateMsg.TlmHeader.Msg, CFE_SB_ValueToMsgId(ROVER_APP_STATE_TLM_MID), sizeof(RoverAppTlmState_t));
+    CFE_MSG_Init(&RoverAppData.LastTwist.TlmHeader.Msg, CFE_SB_ValueToMsgId(ROVER_APP_TLM_TWIST_MID), sizeof(RoverAppData.LastTwist));
 
     /*
     ** Create Software Bus message pipe.
@@ -210,6 +208,19 @@ int32 RoverAppInit(void)
 
         return (status);
     }
+
+
+    /*
+    ** Subscribe to flight odom data
+    */
+    status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(ROVER_APP_CMD_ODOM_MID), RoverAppData.CommandPipe);
+    if (status != CFE_SUCCESS)
+    {
+        CFE_ES_WriteToSysLog("Rover App: Error Subscribing to Odom data, RC = 0x%08lX\n", (unsigned long)status);
+
+        return (status);
+    }
+
     
     /*
     ** Subscribe to HR wakeup
@@ -254,6 +265,10 @@ void RoverAppProcessCommandPacket(CFE_SB_Buffer_t *SBBufPtr)
             RoverAppReportHousekeeping((CFE_MSG_CommandHeader_t *)SBBufPtr);
             break;
 
+        case ROVER_APP_CMD_ODOM_MID:
+            RoverAppProcessFlightOdom(SBBufPtr);
+            break;
+
         case ROVER_APP_HR_CONTROL_MID:
             HighRateControLoop();
             break;
@@ -296,7 +311,7 @@ void RoverAppProcessGroundCommand(CFE_SB_Buffer_t *SBBufPtr)
             break;
 
         case ROVER_APP_SET_TWIST_CC:
-            // if (RoverAppVerifyCmdLength(&SBBufPtr->Msg, sizeof(RoverAppTwistCmd_t)))
+            if (RoverAppVerifyCmdLength(&SBBufPtr->Msg, sizeof(RoverAppTwistCmd_t)))
             {
                 RoverAppCmdTwist((RoverAppTwistCmd_t *)SBBufPtr);
             }
@@ -313,7 +328,34 @@ void RoverAppProcessGroundCommand(CFE_SB_Buffer_t *SBBufPtr)
 
     return;
 
-} /* End of RoverAppProcessGroundCommand() */
+} /* End of RoverAppProcessFlightOdom() */
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+/*                                                                            */
+/* RoverAppProcessFlightOdom() -- rover app flight odometry                   */
+/*                                                                            */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+void RoverAppProcessFlightOdom(CFE_SB_Buffer_t *SBBufPtr)
+{
+    CFE_MSG_FcnCode_t CommandCode = 0;
+
+    CFE_MSG_GetFcnCode(&SBBufPtr->Msg, &CommandCode);
+
+    printf("RoverAppProcessGroundCommand() -- we're getting a flight odometry message ...%d\n", CommandCode);
+
+    // Read
+    if (RoverAppVerifyCmdLength(&SBBufPtr->Msg, sizeof(RoverAppCmdRobotState_t)))
+    {
+       RoverAppCmdRobotState_t* state = (RoverAppCmdRobotState_t *)SBBufPtr;
+       
+       // Fill the lastState
+       lastOdomMsg = state->odom;                     
+    }
+
+
+    return;
+
+} /* End of RoverAppProcessFlightCommand() */
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
@@ -338,17 +380,7 @@ int32 RoverAppReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg)
 
     OS_printf("RoverAppReportHousekeeping reporting: %d\n", RoverAppData.HkTlm.Payload.CommandCounter);
 
-    /*
-    ** Send housekeeping telemetry packet...
-    */
-    // OS_printf("joint0: %f\n", RoverAppData.HkTlm.Payload.state.joint0);
-    // OS_printf("joint1: %f\n", RoverAppData.HkTlm.Payload.state.joint1);
-    // OS_printf("joint2: %f\n", RoverAppData.HkTlm.Payload.state.joint2);
-    // OS_printf("joint3: %f\n", RoverAppData.HkTlm.Payload.state.joint3);
-    // OS_printf("joint4: %f\n", RoverAppData.HkTlm.Payload.state.joint4);
-    // OS_printf("joint5: %f\n", RoverAppData.HkTlm.Payload.state.joint5);
-    // OS_printf("joint6: %f\n", RoverAppData.HkTlm.Payload.state.joint6);
-
+ 
     CFE_SB_TimeStampMsg(&RoverAppData.HkTlm.TlmHeader.Msg);
     CFE_SB_TransmitMsg(&RoverAppData.HkTlm.TlmHeader.Msg, true);
 
@@ -373,23 +405,13 @@ int32 RoverAppNoop(const RoverAppNoopCmd_t *Msg)
 
 int32 RoverAppCmdTwist(const RoverAppTwistCmd_t *Msg)
 {
-    RoverAppLastTwist.linear_x = Msg->twist.linear_x;
-    RoverAppLastTwist.linear_y = Msg->twist.linear_y; 
-    RoverAppLastTwist.linear_z = Msg->twist.linear_z;
-    RoverAppLastTwist.angular_x = Msg->twist.angular_x;
-    RoverAppLastTwist.angular_y = Msg->twist.angular_y;
-    RoverAppLastTwist.angular_z = Msg->twist.angular_z;
+    RoverAppData.LastTwist.twist.linear_x = Msg->twist.linear_x;
+    RoverAppData.LastTwist.twist.linear_y = Msg->twist.linear_y; 
+    RoverAppData.LastTwist.twist.linear_z = Msg->twist.linear_z;
+    RoverAppData.LastTwist.twist.angular_x = Msg->twist.angular_x;
+    RoverAppData.LastTwist.twist.angular_y = Msg->twist.angular_y;
+    RoverAppData.LastTwist.twist.angular_z = Msg->twist.angular_z;
 
-#if 0
-    OS_printf("\nGoal:\n---------------------\n");
-    OS_printf("joint0: %f\n", RoverAppGoal.HkTlm.Payload.state.joint0);
-    OS_printf("joint1: %f\n", RoverAppGoal.HkTlm.Payload.state.joint1);
-    OS_printf("joint2: %f\n", RoverAppGoal.HkTlm.Payload.state.joint2);
-    OS_printf("joint3: %f\n", RoverAppGoal.HkTlm.Payload.state.joint3);
-    OS_printf("joint4: %f\n", RoverAppGoal.HkTlm.Payload.state.joint4);
-    OS_printf("joint5: %f\n", RoverAppGoal.HkTlm.Payload.state.joint5);
-    OS_printf("joint6: %f\n", RoverAppGoal.HkTlm.Payload.state.joint6);
-#endif
 
     CFE_EVS_SendEvent(ROVER_APP_COMMANDTWIST_INF_EID, CFE_EVS_EventType_INFORMATION, "rover app: twist command %s",
                       ROVER_APP_VERSION);
@@ -399,60 +421,40 @@ int32 RoverAppCmdTwist(const RoverAppTwistCmd_t *Msg)
 }
 
 void HighRateControLoop(void) {
-
-    // RoverAppData.square_counter++;
-    // if (RoverAppData.square_counter < 500)
-    // {
-    //     RoverAppGoal.HkTlm.Payload.state.joint3 = -1.0;//Msg->joint3;
-    // }
-    // else if (RoverAppData.square_counter < 1000)
-    // {
-    //     RoverAppGoal.HkTlm.Payload.state.joint3 = 1.0;//Msg->joint3;
-    // }
-    // else if (RoverAppData.square_counter == 1000)
-    // {
-    //     RoverAppData.square_counter = 0;   
-    // }
-
-    // if (RoverAppData.square_counter%100 == 0)
-    // {
-    //     OS_printf("counter: %d,  j: %f\n", (int)RoverAppData.square_counter, RoverAppGoal.HkTlm.Payload.state.joint3);
-    // }
-
-    // RoverAppTlmState_t *st = &StateMsg; //RoverAppGoal.StateTlm;
-    RoverAppTlmState_t *st = &StateMsg; //RoverAppGoal.StateTlm;
     
     // 1. Publish the twist to State in rosfsw (it is like sending a command to the robot)
     // (we should use another name, telemetry is not supposed to command anything)
-    st->twist.linear_x = RoverAppLastTwist.linear_x;
-    st->twist.linear_y = RoverAppLastTwist.linear_y;
-    st->twist.linear_z = RoverAppLastTwist.linear_z;
-    st->twist.angular_x = RoverAppLastTwist.angular_x;
-    st->twist.angular_y = RoverAppLastTwist.angular_y;
-    st->twist.angular_z = RoverAppLastTwist.angular_z;    
+
+    // if (RoverAppData.square_counter%1000 == 0)    
+    {
+    CFE_SB_TimeStampMsg(&RoverAppData.LastTwist.TlmHeader.Msg);
+    CFE_SB_TransmitMsg(&RoverAppData.LastTwist.TlmHeader.Msg, true);    
+    }
+
  
-    // We do NOT have odom stored yet so we are not filling it yet
     
     // 2. Update the telemetry information        
-    RoverAppData.HkTlm.Payload.state.pose_x = 0;
-    RoverAppData.HkTlm.Payload.state.pose_y = 0;
-    RoverAppData.HkTlm.Payload.state.pose_z = 0;
-    RoverAppData.HkTlm.Payload.state.pose_qx = 0;
-    RoverAppData.HkTlm.Payload.state.pose_qy = 0;
-    RoverAppData.HkTlm.Payload.state.pose_qz = 0;
-    RoverAppData.HkTlm.Payload.state.pose_qw = 0;
+    RoverAppOdometry_t *st = &lastOdomMsg; //RoverAppGoal.StateTlm;
 
+    RoverAppData.HkTlm.Payload.state.pose.x = st->pose.x;
+    RoverAppData.HkTlm.Payload.state.pose.y = st->pose.y;
+    RoverAppData.HkTlm.Payload.state.pose.z = st->pose.z;
+    RoverAppData.HkTlm.Payload.state.pose.qx = st->pose.qx;
+    RoverAppData.HkTlm.Payload.state.pose.qy = st->pose.qy;
+    RoverAppData.HkTlm.Payload.state.pose.qz = st->pose.qz;
+    RoverAppData.HkTlm.Payload.state.pose.qw = st->pose.qw;
 
-    // st->errors[3] = RoverAppGoal.HkTlm.Payload.state.joint3;
+    RoverAppData.HkTlm.Payload.state.twist.linear_x = st->twist.linear_x;
+    RoverAppData.HkTlm.Payload.state.twist.linear_y = st->twist.linear_y;
+    RoverAppData.HkTlm.Payload.state.twist.linear_z = st->twist.linear_z;
+    RoverAppData.HkTlm.Payload.state.twist.angular_x = st->twist.angular_x;
+    RoverAppData.HkTlm.Payload.state.twist.angular_y = st->twist.angular_y;
+    RoverAppData.HkTlm.Payload.state.twist.angular_z = st->twist.angular_z;                
 
-    //st->Kp = Kp;
+    // This data is sent when a Housekeeping request is received, 
+    // (usually, at a low rate) so nothing sent here
     //memcpy(&st->joints, &RoverAppData.HkTlm.Payload.state, sizeof(RoverAppSSRMS_t) );
     
-    // if (RoverAppData.square_counter%1000 == 0)
-    {
-    CFE_SB_TimeStampMsg(&st->TlmHeader.Msg);
-    CFE_SB_TransmitMsg(&st->TlmHeader.Msg, true);
-    }
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/

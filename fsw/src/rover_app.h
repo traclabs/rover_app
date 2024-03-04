@@ -68,9 +68,8 @@ typedef struct
     ** Housekeeping telemetry packet...
     */
     RoverAppHkTlm_t HkTlm;
-
-    //double angle;
-
+    RoverAppTlmRobotCommand_t LastTwist;
+    
     /*
     ** Run Status variable used in the main processing loop
     */
@@ -106,6 +105,7 @@ void  RoverAppProcessCommandPacket(CFE_SB_Buffer_t *SBBufPtr);
 void  RoverAppProcessGroundCommand(CFE_SB_Buffer_t *SBBufPtr);
 
 int32 RoverAppReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg);
+void RoverAppProcessFlightOdom(CFE_SB_Buffer_t *SBBufPtr);
 
 int32 RoverAppNoop(const RoverAppNoopCmd_t *Msg);
 int32 RoverAppCmdTwist(const RoverAppTwistCmd_t *Msg);

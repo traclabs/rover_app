@@ -59,14 +59,21 @@ typedef struct
 
 typedef struct
 {
-   float pose_x;
-   float pose_y;
-   float pose_z;
+   float x;
+   float y;
+   float z;
    
-   float pose_qx;
-   float pose_qy;
-   float pose_qz;
-   float pose_qw;   
+   float qx;
+   float qy;
+   float qz;
+   float qw;   
+} RoverAppPose_t;
+
+typedef struct
+{
+  RoverAppPose_t pose;
+  RoverAppTwist_t twist;
+  
 } RoverAppOdometry_t;
 
 typedef struct
@@ -100,14 +107,22 @@ typedef struct
     RoverAppHkTlmPayload_t Payload;   /**< \brief Telemetry payload */
 } RoverAppHkTlm_t;
 
+
+// These 2 messages are for communication with the robot on FSW side
 typedef struct
 {
     CFE_MSG_TelemetryHeader_t  TlmHeader; /**< \brief Telemetry header */
     RoverAppTwist_t twist; /**< Twist currently being applied **/
-    RoverAppOdometry_t odom; /**< Odometry that the robot should calculate and give back to the robot */
-    // float error[]
 
-} RoverAppTlmState_t;
+} RoverAppTlmRobotCommand_t;
+
+typedef struct
+{
+    CFE_MSG_CommandHeader_t  CmdHeader; /**< \brief Command header */
+    RoverAppOdometry_t odom; /**< Twist the robot is currently using **/
+
+} RoverAppCmdRobotState_t;
+
 
 #endif /* _rover_app_msg_h_ */
 
